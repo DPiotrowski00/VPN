@@ -1,8 +1,10 @@
 import ctypes
 import ctypes.wintypes as wt
 import sys
+import os
 
-wintun = ctypes.WinDLL("C:\\Users\\damian.piotrowski\\Desktop\\VPN\\wintun.dll")
+dll_path = os.path.join(os.path.dirname(__file__), "wintun.dll")
+wintun = ctypes.WinDLL(dll_path)
 
 WINTUN_ADAPTER_HANDLE = ctypes.c_void_p
 WINTUN_SESSION_HANDLE = ctypes.c_void_p
