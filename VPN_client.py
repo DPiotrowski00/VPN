@@ -1,10 +1,26 @@
 import ctypes
 import ctypes.wintypes as wt
 import traceback
+import ipaddress
 import socket
 import sys
 import os
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+def isInSameSubnet(addr_a, addr_b, subnet_mask):
+    addr_a_int = int(ipaddress.IPv4Address(addr_a))
+    addr_b_int = int(ipaddress.IPv4Address(addr_b))
+    subnet_mask_int = int(ipaddress.IPv4Address(subnet_mask))
+
+    subnet_a = ipaddress.IPv4Address(addr_a_int & subnet_mask_int)
+    subnet_b = ipaddress.IPv4Address(addr_b_int & subnet_mask_int)
+
+    # print(f"IP a: {addr_a}, IP b: {addr_b}, Mask: {subnet_mask}\nSubnet a: {subnet_a}, Subnet b: {subnet_b}\nIn Same subnet: {subnet_a == subnet_b}")
+
+    if (subnet_a == subnet_b):
+        return True
+    else:
+        return False
 
 UDP_PORT = 51820
 SERVER_IP = "10.0.30.46"
@@ -41,7 +57,7 @@ wintun.WintunReceivePacket.argtypes = [WINTUN_SESSION_HANDLE, ctypes.POINTER(cty
 wintun.WintunReleaseReceivePacket.restype = None
 wintun.WintunReleaseReceivePacket.argtypes = [WINTUN_SESSION_HANDLE, ctypes.POINTER(ctypes.c_ubyte)]
 
-adapter = wintun.WintunCreateAdapter("VPN_CLIENT", "Example", None)
+adapter = wintun.WintunCreateAdapter("VPN_CLIENT", "VPN_CLIENT", None)
 if not adapter:
     print("Failed to create adapter (need admin rights + wintun.dll present)")
     sys.exit(1) 
@@ -59,11 +75,29 @@ try:
             
             src_ip_bytes = data[12:16]
             dst_ip_bytes = data[16:20]
+            ip_version = data[0] >> 4
+            protocol = data[9]
 
             src_ip = socket.inet_ntoa(src_ip_bytes)
             dest_ip = socket.inet_ntoa(dst_ip_bytes)
 
-            if (not (dest_ip == "224.0.0.22" or dest_ip == "121.105.102.222" or dest_ip == "212.68.175.117")):
+            ihl = (data[0] & 0x0F) * 4
+            src_port = int.from_bytes(data[ihl:ihl+2], "big")
+            dest_port = int.from_bytes(data[ihl+2:ihl+4], "big")
+
+            if ipaddress.IPv4Address(src_ip).is_multicast or ipaddress.IPv4Address(dest_ip).is_multicast:
+                continue
+
+            if protocol in (6, 17) and (dest_port not in (80, 443) and src_port not in (80, 443)):
+                continue
+
+            if (ip_version != 4):
+                continue
+
+            if protocol not in (1, 6, 17):
+                continue
+
+            if (True):
                 print(f"SRC_IP: {src_ip}, DEST_IP: {dest_ip}")
                 
                 print (f"Got packet ({size.value} bytes):", data[:20].hex(), "...", f"Forwarding it to the server")
