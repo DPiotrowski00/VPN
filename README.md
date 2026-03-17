@@ -1,0 +1,1 @@
+Use 'dotnet run'
